@@ -18,6 +18,8 @@ const whatsappRoutes = require('./routes/whatsapp.routes');
 
 const developerRoutes = require('./routes/developer.routes');
 
+const uploadRoutes = require('./routes/upload.routes');
+
 
 
 const app = express();
@@ -26,6 +28,9 @@ const PORT = process.env.PORT || 4000;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Serve static files from uploads directory
+app.use('/uploads', express.static('uploads'));
 
 // Health check
 app.get('/health', (req, res) => {
@@ -42,6 +47,8 @@ app.use('/portfolio', portfolioRoutes);
 app.use('/project', projectRoutes);
 
 app.use('/whatsapp', whatsappRoutes);
+app.use('/upload', uploadRoutes);
+
 
 app.use('/developer', developerRoutes);
 
@@ -54,8 +61,8 @@ app.use((err, req, res, next) => {
     });
 });
 
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
 });
 
 

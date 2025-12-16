@@ -5,6 +5,8 @@
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
+    "jws": "^3.2.3",
+    "multer": "^2.0.2",
     "sqlite3": "^5.1.7"
   },
   "devDependencies": {

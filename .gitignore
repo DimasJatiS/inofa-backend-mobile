@@ -1,0 +1,48 @@
+# dependencies
+node_modules/
+
+# environment
+.env
+
+# database
+database.sqlite
+
+# uploads (user generated content)
+uploads/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+# IDEs
+.vscode/
+.idea/
+*.iml
+# build
+dist/
+build/
+
+# others
+.cache/
+*.tmp
+*.log
+*.swp
+coverage/
+.nyc_output/
+*.seed
+*.pid
+*.gz
+*.zip
+.sass-cache/
+*.bak
+*.orig
+*.rej
+*.swo
+*.class
+*.war
+*.jar
+*.war

@@ -77,6 +77,30 @@ db.serialize(() => {
     );
   `);
 
+  // Ensure updated_at column exists in portfolios for pre-existing databases
+  db.all('PRAGMA table_info(portfolios);', [], (err, rows) => {
+    if (err) {
+      console.error('Failed to inspect portfolios schema:', err.message);
+    } else {
+      const hasUpdatedAt = rows && rows.some(r => r.name === 'updated_at');
+      if (!hasUpdatedAt) {
+        db.run('ALTER TABLE portfolios ADD COLUMN updated_at DATETIME;', (alterErr) => {
+          if (alterErr) {
+            console.error('Failed to add updated_at column to portfolios:', alterErr.message);
+          } else {
+            console.log('Added updated_at column to portfolios');
+            // Set initial values for existing rows
+            db.run('UPDATE portfolios SET updated_at = created_at WHERE updated_at IS NULL;', (updateErr) => {
+              if (updateErr) {
+                console.error('Failed to initialize updated_at values:', updateErr.message);
+              }
+            });
+          }
+        });
+      }
+    }
+  });
+
 
   // Tabel projects (client)
   db.run(`
@@ -88,11 +112,54 @@ db.serialize(() => {
       budget REAL,
       skill_requirements TEXT,  -- JSON array
       constraints TEXT,
+      status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'rejected', 'done')),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
   `);
+
+  // Ensure updated_at column exists in projects for pre-existing databases
+  db.all('PRAGMA table_info(projects);', [], (err, rows) => {
+    if (err) {
+      console.error('Failed to inspect projects schema:', err.message);
+    } else {
+      const hasUpdatedAt = rows && rows.some(r => r.name === 'updated_at');
+      const hasStatus = rows && rows.some(r => r.name === 'status');
+      
+      if (!hasUpdatedAt) {
+        db.run('ALTER TABLE projects ADD COLUMN updated_at DATETIME;', (alterErr) => {
+          if (alterErr) {
+            console.error('Failed to add updated_at column to projects:', alterErr.message);
+          } else {
+            console.log('Added updated_at column to projects');
+            // Set initial values for existing rows
+            db.run('UPDATE projects SET updated_at = created_at WHERE updated_at IS NULL;', (updateErr) => {
+              if (updateErr) {
+                console.error('Failed to initialize updated_at values:', updateErr.message);
+              }
+            });
+          }
+        });
+      }
+      
+      if (!hasStatus) {
+        db.run("ALTER TABLE projects ADD COLUMN status TEXT DEFAULT 'pending';", (alterErr) => {
+          if (alterErr) {
+            console.error('Failed to add status column to projects:', alterErr.message);
+          } else {
+            console.log('Added status column to projects');
+            // Set initial values for existing rows
+            db.run("UPDATE projects SET status = 'pending' WHERE status IS NULL;", (updateErr) => {
+              if (updateErr) {
+                console.error('Failed to initialize status values:', updateErr.message);
+              }
+            });
+          }
+        });
+      }
+    }
+  });
 
 });
 

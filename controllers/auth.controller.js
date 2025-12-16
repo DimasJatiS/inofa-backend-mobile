@@ -19,13 +19,21 @@ function generateToken(user) {
 }
 
 exports.register = (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, role } = req.body;
 
   // Validasi sederhana
   if (!email || !password) {
     return res.status(400).json({
       success: false,
       message: 'Email and password are required',
+    });
+  }
+
+  // Validasi role jika diberikan
+  if (role && !['developer', 'client'].includes(role)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Role must be either "developer" or "client"',
     });
   }
 
@@ -45,10 +53,10 @@ exports.register = (req, res) => {
     const hashed = bcrypt.hashSync(password, SALT_ROUNDS);
 
     const insertQuery = `
-      INSERT INTO users (email, password)
-      VALUES (?, ?)
+      INSERT INTO users (email, password, role)
+      VALUES (?, ?, ?)
     `;
-    db.run(insertQuery, [email, hashed], function (err) {
+    db.run(insertQuery, [email, hashed, role || null], function (err) {
       if (err) {
         console.error('DB Error:', err);
         return res.status(500).json({ success: false, message: 'Failed to create user' });
@@ -57,7 +65,7 @@ exports.register = (req, res) => {
       const newUser = {
         id: this.lastID,
         email,
-        role: null,
+        role: role || null,
       };
 
       const token = generateToken(newUser);

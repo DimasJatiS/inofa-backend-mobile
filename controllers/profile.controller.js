@@ -24,10 +24,18 @@ exports.createProfile = (req, res) => {
   }
 
   if (!Array.isArray(skills)) {
-    return res.status(400).json({
-      success: false,
-      message: "Skills must be array",
-    });
+    // Terima string "a,b,c" dan konversi jadi array supaya lebih toleran
+    if (typeof skills === 'string') {
+      skills = skills
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "Skills must be array",
+      });
+    }
   }
   const skillsJson = JSON.stringify(skills);
 
@@ -95,10 +103,17 @@ exports.updateProfile = (req, res) => {
   whatsapp = whatsapp || null;
 
   if (skills !== undefined && !Array.isArray(skills)) {
-    return res.status(400).json({
-      success: false,
-      message: "Skills must be array",
-    });
+    if (typeof skills === 'string') {
+      skills = skills
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "Skills must be array",
+      });
+    }
   }
 
   const getQuery = "SELECT * FROM profiles WHERE user_id = ?";

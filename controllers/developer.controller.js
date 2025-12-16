@@ -4,7 +4,7 @@ exports.getAllDevelopers = (req, res) => {
   let { skill } = req.query;
 
   let query = `
-    SELECT users.id, email, role, profiles.name, profiles.bio, profiles.location, profiles.skills, profiles.whatsapp
+    SELECT users.id, email, role, profiles.name, profiles.bio, profiles.location, profiles.skills, profiles.whatsapp, profiles.photo_url
     FROM users
     JOIN profiles ON profiles.user_id = users.id
     WHERE users.role = 'developer'
@@ -78,7 +78,7 @@ exports.getDeveloperById = (req, res) => {
   const { id } = req.params;
 
   const query = `
-    SELECT users.id, email, role, profiles.name, profiles.bio, profiles.location, profiles.skills, profiles.whatsapp
+    SELECT users.id, email, role, profiles.name, profiles.bio, profiles.location, profiles.skills, profiles.whatsapp, profiles.photo_url
     FROM users
     JOIN profiles ON profiles.user_id = users.id
     WHERE users.id = ? AND users.role = 'developer'
@@ -99,7 +99,7 @@ exports.getDeveloperById = (req, res) => {
     db.all(qPortfolio, [id], (err, prt) => {
       if (err) return res.status(500).json({ success: false, message: "Database error" });
 
-      dev.portfolio = prt;
+      dev.portfolio = prt || [];
 
       return res.json({ success: true, data: dev });
     });
@@ -118,7 +118,7 @@ exports.getMyDeveloperProfile = (req, res) => {
   }
 
   const query = `
-    SELECT users.id, email, profiles.name, profiles.bio, profiles.location, profiles.skills, profiles.whatsapp
+    SELECT users.id, email, profiles.name, profiles.bio, profiles.location, profiles.skills, profiles.whatsapp, profiles.photo_url
     FROM users
     JOIN profiles ON profiles.user_id = users.id
     WHERE users.id = ? AND users.role = 'developer'
@@ -155,7 +155,7 @@ exports.getMyDeveloperProfile = (req, res) => {
         });
       }
 
-      dev.portfolio = prt;
+      dev.portfolio = prt || [];
 
       return res.json({
         success: true,

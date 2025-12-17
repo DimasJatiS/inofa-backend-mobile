@@ -1,0 +1,12 @@
+node_modules
+src
+*.sqlite
+*.db
+.env
+.env.local
+README.md
+tsconfig.json
+nodemon.json
+.git
+.gitignore
+uploads

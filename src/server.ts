@@ -21,7 +21,8 @@ app.use(cors());
 app.use(express.json());
 
 // Serve static files from uploads directory
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+const uploadsDir = process.env.VERCEL ? path.join('/tmp', 'uploads') : path.join(__dirname, '../uploads');
+app.use('/uploads', express.static(uploadsDir));
 
 // Health check
 app.get('/health', (req: Request, res: Response) => {

@@ -9,15 +9,29 @@ const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const auth_middleware_1 = require("../middleware/auth.middleware");
 const router = (0, express_1.Router)();
-// Ensure uploads directory exists
-const uploadDir = path_1.default.join(__dirname, '../../uploads');
-if (!fs_1.default.existsSync(uploadDir)) {
-    fs_1.default.mkdirSync(uploadDir, { recursive: true });
+const isVercel = !!process.env.VERCEL;
+const uploadDir = isVercel ? path_1.default.join('/tmp', 'uploads') : path_1.default.join(__dirname, '../../uploads');
+function ensureUploadDirExists() {
+    try {
+        if (!fs_1.default.existsSync(uploadDir)) {
+            fs_1.default.mkdirSync(uploadDir, { recursive: true });
+        }
+    }
+    catch (error) {
+        // On serverless platforms, writing outside /tmp can throw; avoid crashing at import time.
+        throw error;
+    }
 }
 // Configure multer
 const storage = multer_1.default.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, uploadDir);
+        try {
+            ensureUploadDirExists();
+            cb(null, uploadDir);
+        }
+        catch (error) {
+            cb(error, uploadDir);
+        }
     },
     filename: function (req, file, cb) {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);

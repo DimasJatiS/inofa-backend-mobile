@@ -21,7 +21,8 @@ const PORT = process.env.PORT || 4000;
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
 // Serve static files from uploads directory
-app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, '../uploads')));
+const uploadsDir = process.env.VERCEL ? path_1.default.join('/tmp', 'uploads') : path_1.default.join(__dirname, '../uploads');
+app.use('/uploads', express_1.default.static(uploadsDir));
 // Health check
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', message: 'API is running' });

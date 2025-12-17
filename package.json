@@ -4,12 +4,12 @@
   "type": "commonjs",
   "scripts": {
     "dev": "nodemon --exec ts-node src/server.ts",
-    "build": "prisma generate && .\\node_modules\\.bin\\tsc.cmd",
+    "build": "prisma generate && .\\node_modules\\.bin\\tsc.cmd -p tsconfig.json",
     "postinstall": "echo skip",
     "start": "node dist/server.js",
     "prisma:migrate": "prisma migrate dev",
     "prisma:push": "prisma db push",
-    "vercel-build": "prisma generate && tsc"
+    "vercel-build": "prisma generate && tsc -p tsconfig.json"
   },
   "dependencies": {
     "@prisma/client": "^5.8.0",
@@ -21,6 +21,7 @@
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
+    "typescript": "5.3.3",
     "zod": "^3.22.4"
   },
   "devDependencies": {
@@ -32,7 +33,6 @@
     "@types/node": "^20.10.6",
     "nodemon": "^3.1.11",
     "prisma": "^5.8.0",
-    "ts-node": "^10.9.2",
-    "typescript": "5.3.3"
+    "ts-node": "^10.9.2"
   }
 }

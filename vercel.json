@@ -2,50 +2,14 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/**/*.ts",
+      "src": "api/index.js",
       "use": "@vercel/node"
     }
   ],
   "routes": [
     {
-      "src": "/uploads/(.*)",
-      "dest": "/api/uploads/$1"
-    },
-    {
-      "src": "/health",
-      "dest": "/api/health"
-    },
-    {
-      "src": "/auth/(.*)",
-      "dest": "/api/auth/$1"
-    },
-    {
-      "src": "/profile/(.*)",
-      "dest": "/api/profile/$1"
-    },
-    {
-      "src": "/portfolio/(.*)",
-      "dest": "/api/portfolio/$1"
-    },
-    {
-      "src": "/project/(.*)",
-      "dest": "/api/project/$1"
-    },
-    {
-      "src": "/developer/(.*)",
-      "dest": "/api/developer/$1"
-    },
-    {
-      "src": "/whatsapp/(.*)",
-      "dest": "/api/whatsapp/$1"
-    },
-    {
-      "src": "/upload/(.*)",
-      "dest": "/api/upload/$1"
+      "src": "/(.*)",
+      "dest": "/api/index.js"
     }
-  ],
-  "env": {
-    "DATABASE_URL": "@database_url",
-    "JWT_SECRET": "@jwt_secret"
-  }
+  ]
 }

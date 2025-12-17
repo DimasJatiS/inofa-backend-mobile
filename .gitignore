@@ -22,8 +22,8 @@ Thumbs.db
 .vscode/
 .idea/
 *.iml
-# build
-dist/
+# build - DO NOT ignore dist/ for Vercel deployment
+# dist/
 build/
 
 # others

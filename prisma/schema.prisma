@@ -1,0 +1,71 @@
+// Prisma schema untuk Supabase Postgres
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         Int       @id @default(autoincrement())
+  email      String    @unique
+  password   String
+  role       String?   // 'developer' | 'client'
+  createdAt  DateTime  @default(now()) @map("created_at")
+  
+  profile    Profile?
+  portfolios Portfolio[]
+  projects   Project[]
+
+  @@map("users")
+}
+
+model Profile {
+  id         Int       @id @default(autoincrement())
+  userId     Int       @unique @map("user_id")
+  name       String?
+  photoUrl   String?   @map("photo_url")
+  bio        String?
+  location   String?
+  whatsapp   String?
+  skills     Json?     // Array of strings
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
+  
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+model Portfolio {
+  id          Int       @id @default(autoincrement())
+  userId      Int       @map("user_id")
+  title       String
+  description String?
+  link        String?
+  imageUrl    String?   @map("image_url")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("portfolios")
+}
+
+model Project {
+  id                  Int       @id @default(autoincrement())
+  userId              Int       @map("user_id")
+  title               String
+  description         String?
+  budget              Float?
+  skillRequirements   Json?     @map("skill_requirements") // Array of strings
+  constraints         String?
+  status              String    @default("pending") // 'pending' | 'accepted' | 'rejected' | 'done'
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at")
+  
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("projects")
+}

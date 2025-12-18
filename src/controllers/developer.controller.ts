@@ -61,7 +61,12 @@ export const getAllDevelopers = async (req: Request, res: Response): Promise<voi
 
 export const getDeveloperById = async (req: Request, res: Response): Promise<void> => {
   try {
-    const developerId = parseInt(req.params.id);
+    const developerId = parseInt(req.params.id, 10);
+
+    if (!Number.isFinite(developerId)) {
+      res.status(400).json({ success: false, message: 'Invalid developer id' });
+      return;
+    }
 
     const developer = await prisma.user.findFirst({
       where: {

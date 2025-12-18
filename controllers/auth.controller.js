@@ -18,7 +18,7 @@ function generateToken(user) {
   );
 }
 
-exports.register = async (req, res) => {
+exports.register = (req, res) => {
   const { email, password, role } = req.body;
 
   // Validasi sederhana
@@ -37,44 +37,52 @@ exports.register = async (req, res) => {
     });
   }
 
-  try {
-    const existing = await db.user.findUnique({ where: { email } });
-    if (existing) {
+  // Cek apakah email sudah dipakai
+  const checkQuery = 'SELECT id FROM users WHERE email = ?';
+  db.get(checkQuery, [email], (err, row) => {
+    if (err) {
+      console.error('DB Error:', err);
+      return res.status(500).json({ success: false, message: 'Database error' });
+    }
+
+    if (row) {
       return res.status(409).json({ success: false, message: 'Email already registered' });
     }
 
+    // Hash password
     const hashed = bcrypt.hashSync(password, SALT_ROUNDS);
 
-    const created = await db.user.create({
-      data: {
+    const insertQuery = `
+      INSERT INTO users (email, password, role)
+      VALUES (?, ?, ?)
+    `;
+    db.run(insertQuery, [email, hashed, role || null], function (err) {
+      if (err) {
+        console.error('DB Error:', err);
+        return res.status(500).json({ success: false, message: 'Failed to create user' });
+      }
+
+      const newUser = {
+        id: this.lastID,
         email,
-        password: hashed,
         role: role || null,
-      },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-      },
-    });
+      };
 
-    const token = generateToken(created);
+      const token = generateToken(newUser);
 
-    return res.status(201).json({
-      success: true,
-      message: 'User registered successfully',
-      data: {
-        user: created,
-        token,
-      },
+      return res.status(201).json({
+        success: true,
+        message: 'User registered successfully',
+        data: {
+          user: newUser,
+          token,
+        },
+      });
     });
-  } catch (err) {
-    console.error('DB Error:', err);
-    return res.status(500).json({ success: false, message: 'Failed to create user' });
-  }
+  });
 };
 
-exports.login = async (req, res) => {
+exports.login = (req, res) => {
   const { email, password } = req.body;
 
   // Validasi sederhana
@@ -85,8 +93,13 @@ exports.login = async (req, res) => {
     });
   }
 
-  try {
-    const user = await db.user.findUnique({ where: { email } });
+  const query = 'SELECT * FROM users WHERE email = ?';
+  db.get(query, [email], (err, user) => {
+    if (err) {
+      console.error('DB Error:', err);
+      return res.status(500).json({ success: false, message: 'Database error' });
+    }
+
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -116,61 +129,52 @@ exports.login = async (req, res) => {
         token,
       },
     });
-  } catch (err) {
-    console.error('DB Error:', err);
-    return res.status(500).json({ success: false, message: 'Database error' });
-  }
+  });
 };
 
-exports.statusCheck = async (req, res) => {
+exports.statusCheck = (req, res) => {
   const userId = req.user.id;
-  try {
-    const user = await db.user.findUnique({
-      where: { id: userId },
-      select: { role: true },
-    });
+
+  // Cek role terlebih dahulu
+  const roleQuery = 'SELECT role FROM users WHERE id = ?';
+  db.get(roleQuery, [userId], (err, user) => {
     if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
+      return res.status(404).json({ success: false, message: "User not found" });
     }
 
     if (!user.role) {
       return res.json({
         success: true,
-        status: 'role_missing',
+        status: "role_missing",
         role_missing: true,
         profile_missing: false,
       });
     }
 
-    const profile = await db.profile.findUnique({
-      where: { userId },
-      select: { id: true },
-    });
+    const profileQuery = 'SELECT id FROM profiles WHERE user_id = ?';
+    db.get(profileQuery, [userId], (err, profile) => {
+      if (!profile) {
+        return res.json({
+          success: true,
+          status: "profile_missing",
+          role_missing: false,
+          profile_missing: true,
+        });
+      }
 
-    if (!profile) {
       return res.json({
         success: true,
-        status: 'profile_missing',
+        status: "ready",
         role_missing: false,
-        profile_missing: true,
+        profile_missing: false,
       });
-    }
-
-    return res.json({
-      success: true,
-      status: 'ready',
-      role_missing: false,
-      profile_missing: false,
     });
-  } catch (err) {
-    console.error('DB Error:', err);
-    return res.status(500).json({ success: false, message: 'Database error' });
-  }
+  });
 };
 
 
 // Set / Update role: developer / client
-exports.setRole = async (req, res) => {
+exports.setRole = (req, res) => {
   const { role } = req.body;
 
   if (!role || !['developer', 'client'].includes(role)) {
@@ -182,39 +186,38 @@ exports.setRole = async (req, res) => {
 
   const userId = req.user.id;
 
-  try {
-    const updated = await db.user.update({
-      where: { id: userId },
-      data: { role },
-      select: { id: true, email: true, role: true },
-    });
+  const updateQuery = 'UPDATE users SET role = ? WHERE id = ?';
+  db.run(updateQuery, [role, userId], function (err) {
+    if (err) {
+      console.error('DB Error:', err);
+      return res.status(500).json({ success: false, message: 'Failed to update role' });
+    }
 
-    const token = generateToken(updated);
+    if (this.changes === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
 
     return res.json({
       success: true,
       message: 'Role updated successfully',
       data: {
-        user: updated,
-        token,
+        id: userId,
+        role,
       },
     });
-  } catch (err) {
-    console.error('DB Error:', err);
-    // Prisma throws if record not found
-    return res.status(404).json({ success: false, message: 'User not found' });
-  }
+  });
 };
 
 // Get user info from token
-exports.me = async (req, res) => {
+exports.me = (req, res) => {
   const userId = req.user.id;
 
-  try {
-    const user = await db.user.findUnique({
-      where: { id: userId },
-      select: { id: true, email: true, role: true, createdAt: true },
-    });
+  const query = 'SELECT id, email, role, created_at FROM users WHERE id = ?';
+  db.get(query, [userId], (err, user) => {
+    if (err) {
+      console.error('DB Error:', err);
+      return res.status(500).json({ success: false, message: 'Database error' });
+    }
 
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
@@ -224,8 +227,5 @@ exports.me = async (req, res) => {
       success: true,
       data: user,
     });
-  } catch (err) {
-    console.error('DB Error:', err);
-    return res.status(500).json({ success: false, message: 'Database error' });
-  }
+  });
 };

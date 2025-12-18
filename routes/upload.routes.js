@@ -6,18 +6,15 @@ const path = require('path');
 const fs = require('fs');
 const authMiddleware = require('../middleware/auth.middleware');
 
-const uploadDir = process.env.VERCEL ? '/tmp/uploads' : path.join(__dirname, '../uploads');
+// Pastikan folder uploads ada
+const uploadDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
 
 // Konfigurasi multer
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        try {
-            if (!fs.existsSync(uploadDir)) {
-                fs.mkdirSync(uploadDir, { recursive: true });
-            }
-        } catch (e) {
-            return cb(e);
-        }
         cb(null, uploadDir);
     },
     filename: function (req, file, cb) {

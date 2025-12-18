@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
-const db = require('./db'); // Prisma client (keeps singleton alive)
+const db = require('./db'); // hanya untuk memastikan init jalan
 const authRoutes = require('./routes/auth.routes');
 
 // Tambahkan route profile
@@ -24,45 +24,33 @@ const uploadRoutes = require('./routes/upload.routes');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
-const uploadsDir = process.env.VERCEL ? '/tmp/uploads' : 'uploads';
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
 // Serve static files from uploads directory
-app.use('/uploads', express.static(uploadsDir));
+app.use('/uploads', express.static('uploads'));
 
 // Health check
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', message: 'API is running' });
 });
 
-app.get('/v1/health', (req, res) => {
-    res.json({ status: 'ok', message: 'API is running' });
-});
-
 // Routes
 app.use('/auth', authRoutes);
-app.use('/v1/auth', authRoutes);
 
 app.use('/profile', profileRoutes);
-app.use('/v1/profile', profileRoutes);
 
 app.use('/portfolio', portfolioRoutes);
-app.use('/v1/portfolio', portfolioRoutes);
 
 app.use('/project', projectRoutes);
-app.use('/v1/project', projectRoutes);
 
 app.use('/whatsapp', whatsappRoutes);
-app.use('/v1/whatsapp', whatsappRoutes);
 app.use('/upload', uploadRoutes);
-app.use('/v1/upload', uploadRoutes);
 
 
 app.use('/developer', developerRoutes);
-app.use('/v1/developer', developerRoutes);
 
 // Global error handler sederhana
 app.use((err, req, res, next) => {
@@ -73,13 +61,9 @@ app.use((err, req, res, next) => {
     });
 });
 
-if (require.main === module) {
-    app.listen(PORT, '0.0.0.0', () => {
-        console.log(`Server running on http://0.0.0.0:${PORT}`);
-    });
-}
-
-module.exports = app;
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
+});
 
 
 

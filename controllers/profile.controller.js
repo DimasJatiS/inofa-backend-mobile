@@ -3,7 +3,7 @@ const db = require('../db');
 const { isValidWhatsapp, normalizeWhatsapp } = require('../utils/validator');
 
 // ========================== CREATE PROFILE ==========================
-exports.createProfile = async (req, res) => {
+exports.createProfile = (req, res) => {
   const userId = req.user.id;
 
   let { name, photo_url, bio, location, skills, whatsapp } = req.body;
@@ -37,6 +37,8 @@ exports.createProfile = async (req, res) => {
       });
     }
   }
+  const skillsJson = JSON.stringify(skills);
+
   if (whatsapp && !isValidWhatsapp(whatsapp)) {
     return res.status(400).json({
       success: false,
@@ -44,65 +46,55 @@ exports.createProfile = async (req, res) => {
     });
   }
 
-  try {
-    const existing = await db.profile.findUnique({
-      where: { userId },
-      select: { id: true },
-    });
+  const checkQuery = `SELECT id FROM profiles WHERE user_id = ?`;
+  db.get(checkQuery, [userId], (err, row) => {
+    if (err) return res.status(500).json({ success: false, message: "Database error" });
 
-    if (existing) {
+    if (row) {
       return res.status(409).json({
         success: false,
-        message: 'Profile already exists. Use PUT /profile.',
+        message: "Profile already exists. Use PUT /profile.",
       });
     }
 
-    const created = await db.profile.create({
-      data: {
-        userId,
-        name,
-        photoUrl: photo_url,
-        bio,
-        location,
-        skills,
-        whatsapp,
-      },
-      select: {
-        id: true,
-        name: true,
-        photoUrl: true,
-        bio: true,
-        location: true,
-        skills: true,
-        whatsapp: true,
-      },
-    });
+    const insertQuery = `
+      INSERT INTO profiles (user_id, name, photo_url, bio, location, skills, whatsapp)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `;
 
-    return res.status(201).json({
-      success: true,
-      message: 'Profile created successfully',
-      data: {
-        id: created.id,
-        name: created.name,
-        photo_url: created.photoUrl,
-        bio: created.bio,
-        location: created.location,
-        skills: created.skills || [],
-        whatsapp: created.whatsapp,
-      },
-    });
-  } catch (err) {
-    console.error('DB Error:', err);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to create profile',
-    });
-  }
+    db.run(
+      insertQuery,
+      [userId, name, photo_url, bio, location, skillsJson, whatsapp],
+      function (err) {
+        if (err) {
+          console.error("DB Error:", err);
+          return res.status(500).json({
+            success: false,
+            message: "Failed to create profile",
+          });
+        }
+
+        return res.status(201).json({
+          success: true,
+          message: "Profile created successfully",
+          data: {
+            id: this.lastID,
+            name,
+            photo_url,
+            bio,
+            location,
+            skills,
+            whatsapp,
+          },
+        });
+      }
+    );
+  });
 };
 
 
 // ========================== UPDATE PROFILE (PARTIAL UPDATE) ==========================
-exports.updateProfile = async (req, res) => {
+exports.updateProfile = (req, res) => {
   const userId = req.user.id;
 
   let { name, photo_url, bio, location, skills, whatsapp } = req.body;
@@ -124,86 +116,92 @@ exports.updateProfile = async (req, res) => {
     }
   }
 
-  try {
-    const old = await db.profile.findUnique({ where: { userId } });
-    if (!old) {
-      return res.status(404).json({ success: false, message: 'Profile not found' });
-    }
+  const getQuery = "SELECT * FROM profiles WHERE user_id = ?";
+  db.get(getQuery, [userId], (err, old) => {
+    if (err) return res.status(500).json({ success: false, message: "Database error" });
+    if (!old) return res.status(404).json({ success: false, message: "Profile not found" });
 
-    const updatedWhatsapp = whatsapp !== null ? whatsapp : old.whatsapp;
-    if (updatedWhatsapp && !isValidWhatsapp(updatedWhatsapp)) {
+    const updated = {
+      name: name?.trim() || old.name,
+      photo_url: photo_url?.trim() || old.photo_url,
+      bio: bio?.trim() || old.bio,
+      location: location?.trim() || old.location,
+      skills: skills ? JSON.stringify(skills) : old.skills,
+      whatsapp: whatsapp !== null ? whatsapp : old.whatsapp,
+    };
+
+    if (updated.whatsapp && !isValidWhatsapp(updated.whatsapp)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid WhatsApp number format',
+        message: "Invalid WhatsApp number format",
       });
     }
 
-    await db.profile.update({
-      where: { userId },
-      data: {
-        name: name?.trim() || old.name,
-        photoUrl: photo_url?.trim() || old.photoUrl,
-        bio: bio?.trim() || old.bio,
-        location: location?.trim() || old.location,
-        ...(skills !== undefined ? { skills } : {}),
-        whatsapp: updatedWhatsapp,
-      },
-    });
+    const updateQuery = `
+      UPDATE profiles
+      SET name = ?, photo_url = ?, bio = ?, location = ?, skills = ?, whatsapp = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE user_id = ?
+    `;
 
-    return res.json({
-      success: true,
-      message: 'Profile updated successfully',
-    });
-  } catch (err) {
-    console.error('DB Error:', err);
-    return res.status(500).json({ success: false, message: 'Failed to update profile' });
-  }
+    db.run(
+      updateQuery,
+      [
+        updated.name,
+        updated.photo_url,
+        updated.bio,
+        updated.location,
+        updated.skills,
+        updated.whatsapp,
+        userId,
+      ],
+      function (err) {
+        if (err) {
+          return res.status(500).json({ success: false, message: "Failed to update profile" });
+        }
+
+        return res.json({
+          success: true,
+          message: "Profile updated successfully",
+        });
+      }
+    );
+  });
 };
 
 
 // ========================== GET MY PROFILE ==========================
-exports.getMyProfile = async (req, res) => {
+exports.getMyProfile = (req, res) => {
   const userId = req.user.id;
 
-  try {
-    const row = await db.profile.findUnique({ where: { userId } });
-    if (!row) {
-      return res.status(404).json({ success: false, message: 'Profile not found' });
-    }
+  const query = `SELECT * FROM profiles WHERE user_id = ?`;
 
-    return res.json({
-      success: true,
-      data: {
-        id: row.id,
-        user_id: row.userId,
-        name: row.name,
-        photo_url: row.photoUrl,
-        bio: row.bio,
-        location: row.location,
-        skills: row.skills || [],
-        whatsapp: row.whatsapp,
-        updated_at: row.updatedAt,
-      },
-    });
-  } catch (err) {
-    console.error('DB Error:', err);
-    return res.status(500).json({ success: false, message: 'Database error' });
-  }
+  db.get(query, [userId], (err, row) => {
+    if (err) return res.status(500).json({ success: false, message: "Database error" });
+    if (!row) return res.status(404).json({ success: false, message: "Profile not found" });
+
+    row.skills = row.skills ? JSON.parse(row.skills) : [];
+
+    return res.json({ success: true, data: row });
+  });
 };
 
 
 // ========================== DELETE PROFILE ==========================
-exports.deleteProfile = async (req, res) => {
+exports.deleteProfile = (req, res) => {
   const userId = req.user.id;
 
-  try {
-    await db.profile.delete({ where: { userId } });
+  const deleteQuery = `DELETE FROM profiles WHERE user_id = ?`;
+
+  db.run(deleteQuery, [userId], function (err) {
+    if (err) return res.status(500).json({ success: false, message: "Failed to delete profile" });
+
+    if (this.changes === 0) {
+      return res.status(404).json({ success: false, message: "Profile not found" });
+    }
+
     return res.json({
       success: true,
-      message: 'Profile deleted successfully',
+      message: "Profile deleted successfully",
     });
-  } catch (err) {
-    // Record not found
-    return res.status(404).json({ success: false, message: 'Profile not found' });
-  }
+  });
 };

@@ -2,7 +2,7 @@ const db = require('../db');
 const { isValidURL, limitString } = require('../utils/validator');
 
 // CREATE PROJECT (client only)
-exports.createProject = (req, res) => {
+exports.createProject = async (req, res) => {
   const userId = req.user.id;
   let { title, description, budget, skill_requirements, constraints } = req.body;
 
@@ -30,114 +30,139 @@ exports.createProject = (req, res) => {
     return res.status(400).json({ success: false, message: "Skill requirements cannot be empty" });
   }
 
-  const skillsJSON = JSON.stringify(skill_requirements);
-
-  // Cek apakah client sudah punya profile
-  const queryProfile = "SELECT id FROM profiles WHERE user_id = ?";
-  db.get(queryProfile, [userId], (err, profile) => {
-    if (err) return res.status(500).json({ success: false, message: "Database error" });
+  try {
+    const profile = await db.profile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
     if (!profile) {
       return res.status(400).json({
         success: false,
-        message: "Complete your profile before creating project"
+        message: 'Complete your profile before creating project',
       });
     }
 
-    // Insert project
-    const insertQuery = `
-      INSERT INTO projects (user_id, title, description, budget, skill_requirements, constraints)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `;
+    const created = await db.project.create({
+      data: {
+        userId,
+        title,
+        description: description || null,
+        budget: budget !== undefined && budget !== null ? Number(budget) : null,
+        skillRequirements: skill_requirements,
+        constraints: constraints || null,
+      },
+    });
 
-    db.run(
-      insertQuery,
-      [userId, title, description, budget, skillsJSON, constraints],
-      function (err) {
-        if (err) {
-          return res.status(500).json({ success: false, message: "Failed to create project" });
-        }
-
-        return res.status(201).json({
-          success: true,
-          data: {
-            id: this.lastID,
-            title,
-            description,
-            budget,
-            skill_requirements,
-            constraints
-          }
-        });
-      }
-    );
-  });
+    return res.status(201).json({
+      success: true,
+      data: {
+        id: created.id,
+        user_id: created.userId,
+        title: created.title,
+        description: created.description,
+        budget: created.budget,
+        skill_requirements: created.skillRequirements || [],
+        constraints: created.constraints,
+        status: created.status,
+        created_at: created.createdAt,
+        updated_at: created.updatedAt,
+      },
+    });
+  } catch (err) {
+    console.error('DB Error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to create project' });
+  }
 };
 
 
 // GET PROJECTS OF CLIENT
-exports.getMyProjects = (req, res) => {
+exports.getMyProjects = async (req, res) => {
   const userId = req.user.id;
-  const query = "SELECT * FROM projects WHERE user_id = ?";
-
-  db.all(query, [userId], (err, rows) => {
-    if (err) return res.status(500).json({ success: false, message: "Database error" });
-
-    rows.forEach(row => {
-      row.skill_requirements = JSON.parse(row.skill_requirements);
+  try {
+    const rows = await db.project.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
     });
 
-    return res.json({ success: true, data: rows });
-  });
+    const data = (rows || []).map((p) => ({
+      id: p.id,
+      user_id: p.userId,
+      title: p.title,
+      description: p.description,
+      budget: p.budget,
+      skill_requirements: p.skillRequirements || [],
+      constraints: p.constraints,
+      status: p.status,
+      created_at: p.createdAt,
+      updated_at: p.updatedAt,
+    }));
+
+    return res.json({ success: true, data });
+  } catch (err) {
+    console.error('DB Error:', err);
+    return res.status(500).json({ success: false, message: 'Database error' });
+  }
 };
 
 
 // GET ALL PROJECTS (developer only) + FILTERING
-exports.getAllProjects = (req, res) => {
+exports.getAllProjects = async (req, res) => {
   let { skill, budget_min, budget_max, keyword } = req.query;
 
-  let baseQuery = "SELECT * FROM projects WHERE 1=1";
-  const params = [];
-
-  // keyword search
-  if (keyword) {
-    baseQuery += " AND (title LIKE ? OR description LIKE ?)";
-    params.push(`%${keyword}%`);
-    params.push(`%${keyword}%`);
+  const where = {};
+  if (keyword && typeof keyword === 'string' && keyword.trim() !== '') {
+    const k = keyword.trim();
+    where.OR = [
+      { title: { contains: k, mode: 'insensitive' } },
+      { description: { contains: k, mode: 'insensitive' } },
+    ];
   }
-
-  // budget min
   if (budget_min) {
-    baseQuery += " AND budget >= ?";
-    params.push(Number(budget_min));
+    const bmin = Number(budget_min);
+    if (!Number.isNaN(bmin)) {
+      where.budget = { ...(where.budget || {}), gte: bmin };
+    }
   }
-
-  // budget max
   if (budget_max) {
-    baseQuery += " AND budget <= ?";
-    params.push(Number(budget_max));
+    const bmax = Number(budget_max);
+    if (!Number.isNaN(bmax)) {
+      where.budget = { ...(where.budget || {}), lte: bmax };
+    }
+  }
+  if (skill && typeof skill === 'string' && skill.trim() !== '') {
+    where.skillRequirements = { has: skill.trim() };
   }
 
-  // skill filter (simple JSON LIKE)
-  if (skill) {
-    baseQuery += " AND skill_requirements LIKE ?";
-    params.push(`%"${skill}"%`);
-  }
-
-  db.all(baseQuery, params, (err, rows) => {
-    if (err) return res.status(500).json({ success: false, message: "Database error" });
-
-    rows.forEach(row => {
-      row.skill_requirements = JSON.parse(row.skill_requirements);
+  try {
+    const rows = await db.project.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
     });
 
-    return res.json({ success: true, data: rows });
-  });
+    const data = (rows || []).map((p) => ({
+      id: p.id,
+      user_id: p.userId,
+      title: p.title,
+      description: p.description,
+      budget: p.budget,
+      skill_requirements: p.skillRequirements || [],
+      constraints: p.constraints,
+      status: p.status,
+      created_at: p.createdAt,
+      updated_at: p.updatedAt,
+    }));
+
+    return res.json({ success: true, data });
+  } catch (err) {
+    console.error('DB Error:', err);
+    return res.status(500).json({ success: false, message: 'Database error' });
+  }
 };
 
 // UPDATE PROJECT (client only)
-exports.updateProject = (req, res) => {
+exports.updateProject = async (req, res) => {
   const userId = req.user.id;
-  const projectId = req.params.id;
+  const projectId = Number(req.params.id);
   let { title, description, budget, skill_requirements, constraints } = req.body;
 
   console.log("Update Project - Received body:", JSON.stringify(req.body, null, 2));
@@ -168,147 +193,145 @@ exports.updateProject = (req, res) => {
     return res.status(400).json({ success: false, message: "Skill requirements cannot be empty" });
   }
 
-  const skillsJSON = JSON.stringify(skill_requirements);
-
   console.log("Update Project - userId:", userId, "projectId:", projectId);
-  console.log("Update Project - skillsJSON:", skillsJSON);
 
-  // Cek apakah project milik user ini
-  const checkQuery = "SELECT id FROM projects WHERE id = ? AND user_id = ?";
-  db.get(checkQuery, [projectId, userId], (err, project) => {
-    if (err) {
-      console.error("Update Project - checkQuery error:", err);
-      return res.status(500).json({ success: false, message: "Database error" });
-    }
-    if (!project) {
-      console.log("Update Project - Project not found or not owned by user");
-      return res.status(404).json({ success: false, message: "Project not found or not yours" });
+  try {
+    const existing = await db.project.findFirst({
+      where: { id: projectId, userId },
+      select: { id: true },
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Project not found or not yours' });
     }
 
-    console.log("Update Project - Project found:", project);
+    const updated = await db.project.update({
+      where: { id: projectId },
+      data: {
+        title,
+        description: description || null,
+        budget: budget !== undefined && budget !== null ? Number(budget) : null,
+        skillRequirements: skill_requirements,
+        constraints: constraints || null,
+      },
+    });
 
-    // Update project
-    const updateQuery = `
-      UPDATE projects 
-      SET title = ?, description = ?, budget = ?, skill_requirements = ?, constraints = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `;
-
-    console.log("Update Project - Executing update with params:", [title, description, budget, skillsJSON, constraints, projectId]);
-
-    db.run(
-      updateQuery,
-      [title, description, budget, skillsJSON, constraints, projectId],
-      function (err) {
-        if (err) {
-          console.error("Update Project - updateQuery error:", err);
-          return res.status(500).json({ success: false, message: "Failed to update project", error: err.message });
-        }
-        
-        console.log("Update Project - Update successful, changes:", this.changes);
-
-        // Get updated project
-        const getQuery = "SELECT * FROM projects WHERE id = ?";
-        db.get(getQuery, [projectId], (err, row) => {
-          if (err) {
-            console.error("Update Project - getQuery error:", err);
-            return res.status(500).json({ success: false, message: "Database error" });
-          }
-          
-          console.log("Update Project - Fetched updated project:", row);
-          
-          row.skill_requirements = JSON.parse(row.skill_requirements);
-
-          return res.json({
-            success: true,
-            message: "Project updated successfully",
-            data: row
-          });
-        });
-      }
-    );
-  });
+    return res.json({
+      success: true,
+      message: 'Project updated successfully',
+      data: {
+        id: updated.id,
+        user_id: updated.userId,
+        title: updated.title,
+        description: updated.description,
+        budget: updated.budget,
+        skill_requirements: updated.skillRequirements || [],
+        constraints: updated.constraints,
+        status: updated.status,
+        created_at: updated.createdAt,
+        updated_at: updated.updatedAt,
+      },
+    });
+  } catch (err) {
+    console.error('Update Project Error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to update project', error: err.message });
+  }
 };
 
 // DELETE PROJECT (client only)
-exports.deleteProject = (req, res) => {
+exports.deleteProject = async (req, res) => {
   const userId = req.user.id;
-  const projectId = req.params.id;
+  const projectId = Number(req.params.id);
 
-  // Cek apakah project milik user ini
-  const checkQuery = "SELECT id FROM projects WHERE id = ? AND user_id = ?";
-  db.get(checkQuery, [projectId, userId], (err, project) => {
-    if (err) return res.status(500).json({ success: false, message: "Database error" });
-    if (!project) {
-      return res.status(404).json({ success: false, message: "Project not found or not yours" });
+  try {
+    const result = await db.project.deleteMany({ where: { id: projectId, userId } });
+    if (!result || result.count === 0) {
+      return res.status(404).json({ success: false, message: 'Project not found or not yours' });
     }
 
-    // Delete project
-    const deleteQuery = "DELETE FROM projects WHERE id = ?";
-    db.run(deleteQuery, [projectId], function (err) {
-      if (err) {
-        return res.status(500).json({ success: false, message: "Failed to delete project" });
-      }
-
-      return res.json({
-        success: true,
-        message: "Project deleted successfully"
-      });
+    return res.json({
+      success: true,
+      message: 'Project deleted successfully',
     });
-  });
+  } catch (err) {
+    console.error('Delete Project Error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to delete project' });
+  }
 };
 
 // GET PROJECT BY ID WITH CREATOR INFO (authenticated users)
-exports.getProjectById = (req, res) => {
-  const projectId = req.params.id;
+exports.getProjectById = async (req, res) => {
+  const projectId = Number(req.params.id);
+  if (!Number.isInteger(projectId) || projectId <= 0) {
+    return res.status(400).json({ success: false, message: 'Invalid project id' });
+  }
 
-  const query = `
-    SELECT 
-      p.*,
-      u.email as creator_email,
-      pr.name as creator_name,
-      pr.bio as creator_bio,
-      pr.location as creator_location,
-      pr.whatsapp as creator_whatsapp,
-      pr.photo_url as creator_photo_url
-    FROM projects p
-    LEFT JOIN users u ON p.user_id = u.id
-    LEFT JOIN profiles pr ON p.user_id = pr.user_id
-    WHERE p.id = ?
-  `;
-
-  db.get(query, [projectId], (err, row) => {
-    if (err) {
-      return res.status(500).json({ success: false, message: "Database error" });
-    }
-    
-    if (!row) {
-      return res.status(404).json({ success: false, message: "Project not found" });
-    }
-
-    // Parse skill requirements
-    row.skill_requirements = JSON.parse(row.skill_requirements);
-
-    // Format creator whatsapp link
-    if (row.creator_whatsapp) {
-      // Remove any non-digit characters
-      const cleanNumber = row.creator_whatsapp.replace(/\D/g, '');
-      // Add country code if not present
-      const whatsappNumber = cleanNumber.startsWith('62') ? cleanNumber : '62' + cleanNumber.replace(/^0/, '');
-      row.creator_whatsapp_link = `https://wa.me/${whatsappNumber}`;
-    }
-
-    return res.json({ 
-      success: true, 
-      data: row
+  try {
+    const project = await db.project.findUnique({
+      where: { id: projectId },
+      include: {
+        user: {
+          select: {
+            email: true,
+            profile: {
+              select: {
+                name: true,
+                bio: true,
+                location: true,
+                whatsapp: true,
+                photoUrl: true,
+              },
+            },
+          },
+        },
+      },
     });
-  });
+
+    if (!project) {
+      return res.status(404).json({ success: false, message: 'Project not found' });
+    }
+
+    const creatorWhatsapp = project.user?.profile?.whatsapp || null;
+    let creatorWhatsappLink = null;
+    if (creatorWhatsapp) {
+      const cleanNumber = creatorWhatsapp.replace(/\D/g, '');
+      const whatsappNumber = cleanNumber.startsWith('62')
+        ? cleanNumber
+        : '62' + cleanNumber.replace(/^0/, '');
+      creatorWhatsappLink = `https://wa.me/${whatsappNumber}`;
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        id: project.id,
+        user_id: project.userId,
+        title: project.title,
+        description: project.description,
+        budget: project.budget,
+        skill_requirements: project.skillRequirements || [],
+        constraints: project.constraints,
+        status: project.status,
+        created_at: project.createdAt,
+        updated_at: project.updatedAt,
+        creator_email: project.user?.email || null,
+        creator_name: project.user?.profile?.name || null,
+        creator_bio: project.user?.profile?.bio || null,
+        creator_location: project.user?.profile?.location || null,
+        creator_whatsapp: creatorWhatsapp,
+        creator_photo_url: project.user?.profile?.photoUrl || null,
+        creator_whatsapp_link: creatorWhatsappLink,
+      },
+    });
+  } catch (err) {
+    console.error('DB Error:', err);
+    return res.status(500).json({ success: false, message: 'Database error' });
+  }
 };
 
 // UPDATE PROJECT STATUS (client only)
-exports.updateProjectStatus = (req, res) => {
+exports.updateProjectStatus = async (req, res) => {
   const userId = req.user.id;
-  const projectId = req.params.id;
+  const projectId = Number(req.params.id);
   const { status } = req.body;
 
   console.log("Update Project Status - userId:", userId, "projectId:", projectId, "status:", status);
@@ -322,41 +345,39 @@ exports.updateProjectStatus = (req, res) => {
     });
   }
 
-  // Cek apakah project milik user ini
-  const checkQuery = "SELECT id FROM projects WHERE id = ? AND user_id = ?";
-  db.get(checkQuery, [projectId, userId], (err, project) => {
-    if (err) {
-      console.error("Update Project Status - checkQuery error:", err);
-      return res.status(500).json({ success: false, message: "Database error" });
-    }
-    if (!project) {
-      return res.status(404).json({ success: false, message: "Project not found or not yours" });
-    }
-
-    // Update status
-    const updateQuery = "UPDATE projects SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
-    db.run(updateQuery, [status, projectId], function (err) {
-      if (err) {
-        console.error("Update Project Status - updateQuery error:", err);
-        return res.status(500).json({ success: false, message: "Failed to update project status" });
-      }
-
-      // Get updated project
-      const getQuery = "SELECT * FROM projects WHERE id = ?";
-      db.get(getQuery, [projectId], (err, row) => {
-        if (err) {
-          console.error("Update Project Status - getQuery error:", err);
-          return res.status(500).json({ success: false, message: "Database error" });
-        }
-        
-        row.skill_requirements = JSON.parse(row.skill_requirements);
-
-        return res.json({
-          success: true,
-          message: "Project status updated successfully",
-          data: row
-        });
-      });
+  try {
+    const existing = await db.project.findFirst({
+      where: { id: projectId, userId },
+      select: { id: true },
     });
-  });
+
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Project not found or not yours' });
+    }
+
+    const updated = await db.project.update({
+      where: { id: projectId },
+      data: { status },
+    });
+
+    return res.json({
+      success: true,
+      message: 'Project status updated successfully',
+      data: {
+        id: updated.id,
+        user_id: updated.userId,
+        title: updated.title,
+        description: updated.description,
+        budget: updated.budget,
+        skill_requirements: updated.skillRequirements || [],
+        constraints: updated.constraints,
+        status: updated.status,
+        created_at: updated.createdAt,
+        updated_at: updated.updatedAt,
+      },
+    });
+  } catch (err) {
+    console.error('Update Project Status Error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to update project status' });
+  }
 };

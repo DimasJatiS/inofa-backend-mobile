@@ -18,7 +18,7 @@ function generateToken(user) {
   );
 }
 
-exports.register = (req, res) => {
+exports.register = async (req, res) => {
   const { email, password, role } = req.body;
 
   // Validasi sederhana
@@ -37,52 +37,44 @@ exports.register = (req, res) => {
     });
   }
 
-  // Cek apakah email sudah dipakai
-  const checkQuery = 'SELECT id FROM users WHERE email = ?';
-  db.get(checkQuery, [email], (err, row) => {
-    if (err) {
-      console.error('DB Error:', err);
-      return res.status(500).json({ success: false, message: 'Database error' });
-    }
-
-    if (row) {
+  try {
+    const existing = await db.user.findUnique({ where: { email } });
+    if (existing) {
       return res.status(409).json({ success: false, message: 'Email already registered' });
     }
 
-    // Hash password
     const hashed = bcrypt.hashSync(password, SALT_ROUNDS);
 
-    const insertQuery = `
-      INSERT INTO users (email, password, role)
-      VALUES (?, ?, ?)
-    `;
-    db.run(insertQuery, [email, hashed, role || null], function (err) {
-      if (err) {
-        console.error('DB Error:', err);
-        return res.status(500).json({ success: false, message: 'Failed to create user' });
-      }
-
-      const newUser = {
-        id: this.lastID,
+    const created = await db.user.create({
+      data: {
         email,
+        password: hashed,
         role: role || null,
-      };
-
-      const token = generateToken(newUser);
-
-      return res.status(201).json({
-        success: true,
-        message: 'User registered successfully',
-        data: {
-          user: newUser,
-          token,
-        },
-      });
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+      },
     });
-  });
+
+    const token = generateToken(created);
+
+    return res.status(201).json({
+      success: true,
+      message: 'User registered successfully',
+      data: {
+        user: created,
+        token,
+      },
+    });
+  } catch (err) {
+    console.error('DB Error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to create user' });
+  }
 };
 
-exports.login = (req, res) => {
+exports.login = async (req, res) => {
   const { email, password } = req.body;
 
   // Validasi sederhana
@@ -93,13 +85,8 @@ exports.login = (req, res) => {
     });
   }
 
-  const query = 'SELECT * FROM users WHERE email = ?';
-  db.get(query, [email], (err, user) => {
-    if (err) {
-      console.error('DB Error:', err);
-      return res.status(500).json({ success: false, message: 'Database error' });
-    }
-
+  try {
+    const user = await db.user.findUnique({ where: { email } });
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -129,52 +116,61 @@ exports.login = (req, res) => {
         token,
       },
     });
-  });
+  } catch (err) {
+    console.error('DB Error:', err);
+    return res.status(500).json({ success: false, message: 'Database error' });
+  }
 };
 
-exports.statusCheck = (req, res) => {
+exports.statusCheck = async (req, res) => {
   const userId = req.user.id;
-
-  // Cek role terlebih dahulu
-  const roleQuery = 'SELECT role FROM users WHERE id = ?';
-  db.get(roleQuery, [userId], (err, user) => {
+  try {
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
 
     if (!user.role) {
       return res.json({
         success: true,
-        status: "role_missing",
+        status: 'role_missing',
         role_missing: true,
         profile_missing: false,
       });
     }
 
-    const profileQuery = 'SELECT id FROM profiles WHERE user_id = ?';
-    db.get(profileQuery, [userId], (err, profile) => {
-      if (!profile) {
-        return res.json({
-          success: true,
-          status: "profile_missing",
-          role_missing: false,
-          profile_missing: true,
-        });
-      }
+    const profile = await db.profile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
 
+    if (!profile) {
       return res.json({
         success: true,
-        status: "ready",
+        status: 'profile_missing',
         role_missing: false,
-        profile_missing: false,
+        profile_missing: true,
       });
+    }
+
+    return res.json({
+      success: true,
+      status: 'ready',
+      role_missing: false,
+      profile_missing: false,
     });
-  });
+  } catch (err) {
+    console.error('DB Error:', err);
+    return res.status(500).json({ success: false, message: 'Database error' });
+  }
 };
 
 
 // Set / Update role: developer / client
-exports.setRole = (req, res) => {
+exports.setRole = async (req, res) => {
   const { role } = req.body;
 
   if (!role || !['developer', 'client'].includes(role)) {
@@ -186,38 +182,39 @@ exports.setRole = (req, res) => {
 
   const userId = req.user.id;
 
-  const updateQuery = 'UPDATE users SET role = ? WHERE id = ?';
-  db.run(updateQuery, [role, userId], function (err) {
-    if (err) {
-      console.error('DB Error:', err);
-      return res.status(500).json({ success: false, message: 'Failed to update role' });
-    }
+  try {
+    const updated = await db.user.update({
+      where: { id: userId },
+      data: { role },
+      select: { id: true, email: true, role: true },
+    });
 
-    if (this.changes === 0) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
+    const token = generateToken(updated);
 
     return res.json({
       success: true,
       message: 'Role updated successfully',
       data: {
-        id: userId,
-        role,
+        user: updated,
+        token,
       },
     });
-  });
+  } catch (err) {
+    console.error('DB Error:', err);
+    // Prisma throws if record not found
+    return res.status(404).json({ success: false, message: 'User not found' });
+  }
 };
 
 // Get user info from token
-exports.me = (req, res) => {
+exports.me = async (req, res) => {
   const userId = req.user.id;
 
-  const query = 'SELECT id, email, role, created_at FROM users WHERE id = ?';
-  db.get(query, [userId], (err, user) => {
-    if (err) {
-      console.error('DB Error:', err);
-      return res.status(500).json({ success: false, message: 'Database error' });
-    }
+  try {
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, role: true, createdAt: true },
+    });
 
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
@@ -227,5 +224,8 @@ exports.me = (req, res) => {
       success: true,
       data: user,
     });
-  });
+  } catch (err) {
+    console.error('DB Error:', err);
+    return res.status(500).json({ success: false, message: 'Database error' });
+  }
 };

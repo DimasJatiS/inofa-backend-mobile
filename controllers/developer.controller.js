@@ -1,188 +1,112 @@
 const db = require('../db');
 
-exports.getAllDevelopers = async (req, res) => {
+exports.getAllDevelopers = (req, res) => {
   let { skill } = req.query;
 
-  skill = typeof skill === 'string' ? skill.trim() : null;
-  if (skill === '') skill = null;
+  let query = `
+    SELECT users.id, email, role, profiles.name, profiles.bio, profiles.location, profiles.skills, profiles.whatsapp, profiles.photo_url
+    FROM users
+    JOIN profiles ON profiles.user_id = users.id
+    WHERE users.role = 'developer'
+  `;
 
-  try {
-    const users = await db.user.findMany({
-      where: {
-        role: 'developer',
-        ...(skill
-          ? {
-              profile: {
-                is: {
-                  skills: {
-                    has: skill,
-                  },
-                },
-              },
-            }
-          : {}),
-      },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        profile: {
-          select: {
-            name: true,
-            bio: true,
-            location: true,
-            skills: true,
-            whatsapp: true,
-            photoUrl: true,
-          },
-        },
-      },
+  const params = [];
+
+  if (skill) {
+    query += " AND profiles.skills LIKE ?";
+    params.push(`%"${skill}"%`);
+  }
+
+  db.all(query, params, (err, rows) => {
+    if (err) return res.status(500).json({ success: false, message: "Database error" });
+
+    rows.forEach(row => {
+      row.skills = row.skills ? JSON.parse(row.skills) : [];
     });
 
-    const data = users
-      .filter((u) => u.profile)
-      .map((u) => ({
-        id: u.id,
-        email: u.email,
-        role: u.role,
-        name: u.profile.name,
-        bio: u.profile.bio,
-        location: u.profile.location,
-        skills: u.profile.skills || [],
-        whatsapp: u.profile.whatsapp,
-        photo_url: u.profile.photoUrl,
-      }));
-
-    return res.json({ success: true, data });
-  } catch (err) {
-    console.error('DB Error:', err);
-    return res.status(500).json({ success: false, message: 'Database error' });
-  }
+    return res.json({ success: true, data: rows });
+  });
 };
 
-exports.searchDevelopersBySkill = async (req, res) => {
+exports.searchDevelopersBySkill = (req, res) => {
   let { skill } = req.query;
 
-  if (!skill || typeof skill !== 'string' || skill.trim() === '') {
+  if (!skill || skill.trim() === "") {
     return res.status(400).json({
       success: false,
-      message: 'Skill query is required',
+      message: "Skill query is required"
     });
   }
 
   skill = skill.trim();
 
-  try {
-    const users = await db.user.findMany({
-      where: {
-        role: 'developer',
-        profile: {
-          is: {
-            skills: {
-              has: skill,
-            },
-          },
-        },
-      },
-      select: {
-        id: true,
-        email: true,
-        profile: {
-          select: {
-            name: true,
-            bio: true,
-            location: true,
-            skills: true,
-            whatsapp: true,
-          },
-        },
-      },
-    });
+  const query = `
+    SELECT users.id, email, profiles.name, profiles.bio, profiles.location, profiles.skills, profiles.whatsapp
+    FROM users
+    JOIN profiles ON profiles.user_id = users.id
+    WHERE users.role = 'developer'
+      AND profiles.skills LIKE ?
+  `;
 
-    const data = users
-      .filter((u) => u.profile)
-      .map((u) => {
-        const whatsapp = u.profile.whatsapp || null;
-        return {
-          id: u.id,
-          email: u.email,
-          name: u.profile.name,
-          bio: u.profile.bio,
-          location: u.profile.location,
-          skills: u.profile.skills || [],
-          whatsapp,
-          whatsapp_link: whatsapp ? `https://wa.me/${whatsapp}` : null,
-        };
+  const param = [`%"${skill}"%`];
+
+  db.all(query, param, (err, rows) => {
+    if (err) {
+      return res.status(500).json({
+        success: false,
+        message: "Database error"
       });
-
-    return res.json({ success: true, data });
-  } catch (err) {
-    console.error('DB Error:', err);
-    return res.status(500).json({
-      success: false,
-      message: 'Database error',
-    });
-  }
-};
-
-
-exports.getDeveloperById = async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) {
-    return res.status(400).json({ success: false, message: 'Invalid developer id' });
-  }
-
-  try {
-    const user = await db.user.findFirst({
-      where: { id, role: 'developer' },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        profile: {
-          select: {
-            name: true,
-            bio: true,
-            location: true,
-            skills: true,
-            whatsapp: true,
-            photoUrl: true,
-          },
-        },
-        portfolios: {
-          orderBy: { createdAt: 'desc' },
-        },
-      },
-    });
-
-    if (!user || !user.profile) {
-      return res.status(404).json({ success: false, message: 'Developer not found' });
     }
 
-    const whatsapp = user.profile.whatsapp || null;
+    rows.forEach(dev => {
+        dev.skills = JSON.parse(dev.skills || "[]");
 
-    const data = {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      name: user.profile.name,
-      bio: user.profile.bio,
-      location: user.profile.location,
-      skills: user.profile.skills || [],
-      whatsapp,
-      photo_url: user.profile.photoUrl,
-      whatsapp_link: whatsapp ? `https://wa.me/${whatsapp}` : null,
-      portfolio: user.portfolios || [],
-    };
+        dev.whatsapp_link = dev.whatsapp
+            ? `https://wa.me/${dev.whatsapp}`
+            : null;
+    });
 
-    return res.json({ success: true, data });
-  } catch (err) {
-    console.error('DB Error:', err);
-    return res.status(500).json({ success: false, message: 'Database error' });
-  }
+    return res.json({
+      success: true,
+      data: rows
+    });
+  });
 };
 
-exports.getMyDeveloperProfile = async (req, res) => {
+
+exports.getDeveloperById = (req, res) => {
+  const { id } = req.params;
+
+  const query = `
+    SELECT users.id, email, role, profiles.name, profiles.bio, profiles.location, profiles.skills, profiles.whatsapp, profiles.photo_url
+    FROM users
+    JOIN profiles ON profiles.user_id = users.id
+    WHERE users.id = ? AND users.role = 'developer'
+  `;
+
+  db.get(query, [id], (err, dev) => {
+    if (err) return res.status(500).json({ success: false, message: "Database error" });
+    if (!dev) return res.status(404).json({ success: false, message: "Developer not found" });
+
+    dev.skills = dev.skills ? JSON.parse(dev.skills) : [];
+
+    dev.whatsapp_link = dev.whatsapp
+        ? `https://wa.me/${dev.whatsapp}`
+        : null;
+
+    // Ambil portfolio developer
+    const qPortfolio = "SELECT * FROM portfolios WHERE user_id = ?";
+    db.all(qPortfolio, [id], (err, prt) => {
+      if (err) return res.status(500).json({ success: false, message: "Database error" });
+
+      dev.portfolio = prt || [];
+
+      return res.json({ success: true, data: dev });
+    });
+  });
+};
+
+exports.getMyDeveloperProfile = (req, res) => {
   const userId = req.user.id;
 
   // pastikan role developer
@@ -193,58 +117,50 @@ exports.getMyDeveloperProfile = async (req, res) => {
     });
   }
 
-  try {
-    const user = await db.user.findFirst({
-      where: { id: userId, role: 'developer' },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        profile: {
-          select: {
-            name: true,
-            bio: true,
-            location: true,
-            skills: true,
-            whatsapp: true,
-            photoUrl: true,
-          },
-        },
-        portfolios: {
-          orderBy: { createdAt: 'desc' },
-        },
-      },
-    });
+  const query = `
+    SELECT users.id, email, profiles.name, profiles.bio, profiles.location, profiles.skills, profiles.whatsapp, profiles.photo_url
+    FROM users
+    JOIN profiles ON profiles.user_id = users.id
+    WHERE users.id = ? AND users.role = 'developer'
+  `;
 
-    if (!user || !user.profile) {
-      return res.status(404).json({
+  db.get(query, [userId], (err, dev) => {
+    if (err) {
+      return res.status(500).json({
         success: false,
-        message: 'Profile not found',
+        message: "Database error"
       });
     }
 
-    const whatsapp = user.profile.whatsapp || null;
+    if (!dev) {
+      return res.status(404).json({
+        success: false,
+        message: "Profile not found"
+      });
+    }
 
-    const data = {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      name: user.profile.name,
-      bio: user.profile.bio,
-      location: user.profile.location,
-      skills: user.profile.skills || [],
-      whatsapp,
-      photo_url: user.profile.photoUrl,
-      whatsapp_link: whatsapp ? `https://wa.me/${whatsapp}` : null,
-      portfolio: user.portfolios || [],
-    };
+    dev.skills = JSON.parse(dev.skills || "[]");
 
-    return res.json({ success: true, data });
-  } catch (err) {
-    console.error('DB Error:', err);
-    return res.status(500).json({
-      success: false,
-      message: 'Database error',
+    dev.whatsapp_link = dev.whatsapp
+        ? `https://wa.me/${dev.whatsapp}`
+        : null;
+
+    // ambil portfolio
+    const portfolioQuery = "SELECT * FROM portfolios WHERE user_id = ?";
+    db.all(portfolioQuery, [userId], (err, prt) => {
+      if (err) {
+        return res.status(500).json({
+          success: false,
+          message: "Database error"
+        });
+      }
+
+      dev.portfolio = prt || [];
+
+      return res.json({
+        success: true,
+        data: dev
+      });
     });
-  }
+  });
 };

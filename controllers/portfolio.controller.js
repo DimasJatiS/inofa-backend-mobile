@@ -2,7 +2,7 @@
 const db = require('../db');
 const { isValidURL, limitString } = require('../utils/validator');
 
-exports.createPortfolio = async (req, res) => {
+exports.createPortfolio = (req, res) => {
   const userId = req.user.id;
   let { title, description, link, image_url } = req.body;
 
@@ -79,81 +79,70 @@ exports.createPortfolio = async (req, res) => {
     });
   }
 
-  try {
-    const profile = await db.profile.findUnique({
-      where: { userId },
-      select: { id: true },
-    });
+  // Cek profile dulu
+  const checkProfile = 'SELECT id FROM profiles WHERE user_id = ?';
+
+  db.get(checkProfile, [userId], (err, profile) => {
+    if (err) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database error'
+      });
+    }
 
     if (!profile) {
       return res.status(400).json({
         success: false,
-        message: 'Complete your profile before adding portfolio',
+        message: 'Complete your profile before adding portfolio'
       });
     }
 
-    const created = await db.portfolio.create({
-      data: {
-        userId,
-        title,
-        description: description || null,
-        link: link || null,
-        imageUrl: image_url || null,
-      },
-      select: { id: true },
-    });
+    const query = `
+      INSERT INTO portfolios (user_id, title, description, link, image_url)
+      VALUES (?, ?, ?, ?, ?)
+    `;
 
-    console.log('Portfolio created successfully! ID:', created.id);
+    db.run(query, [userId, title, description, link, image_url], function (err) {
+      if (err) {
+        console.error('Database error creating portfolio:', err);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to create portfolio',
+          error: err.message
+        });
+      }
 
-    return res.status(201).json({
-      success: true,
-      data: {
-        id: created.id,
-        title,
-        description,
-        link,
-        image_url,
-      },
+      console.log('Portfolio created successfully! ID:', this.lastID);
+
+      return res.status(201).json({
+        success: true,
+        data: {
+          id: this.lastID,
+          title,
+          description,
+          link,
+          image_url
+        }
+      });
     });
-  } catch (err) {
-    console.error('Database error creating portfolio:', err);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to create portfolio',
-      error: err.message,
-    });
-  }
+  });
 };
 
 // GET portfolios of the authenticated developer
-exports.getMyPortfolio = async (req, res) => {
+exports.getMyPortfolio = (req, res) => {
   const userId = req.user.id;
 
-  try {
-    const rows = await db.portfolio.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    const data = (rows || []).map((r) => ({
-      id: r.id,
-      user_id: r.userId,
-      title: r.title,
-      description: r.description,
-      link: r.link,
-      image_url: r.imageUrl,
-      created_at: r.createdAt,
-      updated_at: r.updatedAt,
-    }));
-
-    return res.json({ success: true, data });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: 'Database error' });
-  }
+  const query = `SELECT * FROM portfolios WHERE user_id = ? ORDER BY created_at DESC`;
+  db.all(query, [userId], (err, rows) => {
+    if (err) {
+      return res.status(500).json({ success: false, message: 'Database error' });
+    }
+    return res.json({ success: true, data: rows || [] });
+  });
 };
 
 // GET a single portfolio by ID (must belong to the authenticated developer)
-exports.getPortfolioById = async (req, res) => {
+exports.getPortfolioById = (req, res) => {
   const userId = req.user.id;
   const id = Number(req.params.id);
 
@@ -161,33 +150,20 @@ exports.getPortfolioById = async (req, res) => {
     return res.status(400).json({ success: false, message: 'Invalid portfolio id' });
   }
 
-  try {
-    const row = await db.portfolio.findFirst({
-      where: { id, userId },
-    });
+    const query = `SELECT * FROM portfolios WHERE id = ? AND user_id = ?`;
+  db.get(query, [id, userId], (err, row) => {
+    if (err) {
+      return res.status(500).json({ success: false, message: 'Database error' });
+    }
     if (!row) {
       return res.status(404).json({ success: false, message: 'Portfolio not found' });
     }
-    return res.json({
-      success: true,
-      data: {
-        id: row.id,
-        user_id: row.userId,
-        title: row.title,
-        description: row.description,
-        link: row.link,
-        image_url: row.imageUrl,
-        created_at: row.createdAt,
-        updated_at: row.updatedAt,
-      },
-    });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: 'Database error' });
-  }
+      return res.json({ success: true, data: row });
+  });
 };
 
 // UPDATE a portfolio item that belongs to the authenticated developer
-exports.updatePortfolio = async (req, res) => {
+exports.updatePortfolio = (req, res) => {
   const userId = req.user.id;
   const id = Number(req.params.id);
   let { title, description, link, image_url } = req.body;
@@ -262,51 +238,50 @@ exports.updatePortfolio = async (req, res) => {
     });
   }
 
-  try {
-    const existing = await db.portfolio.findFirst({
-      where: { id, userId },
-      select: { id: true },
-    });
-
-    if (!existing) {
+  // Cek apakah portfolio ada dan milik user ini
+  const checkQuery = `SELECT id FROM portfolios WHERE id = ? AND user_id = ?`;
+  db.get(checkQuery, [id, userId], (err, row) => {
+    if (err) {
+      return res.status(500).json({ success: false, message: 'Database error' });
+    }
+    if (!row) {
       return res.status(404).json({ success: false, message: 'Portfolio not found' });
     }
 
-    const updatedRow = await db.portfolio.update({
-      where: { id },
-      data: {
-        title,
-        description: description || null,
-        link: link || null,
-        imageUrl: image_url || null,
-      },
-    });
+    // Update portfolio
+    const updateQuery = `
+      UPDATE portfolios 
+      SET title = ?, description = ?, link = ?, image_url = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND user_id = ?
+    `;
 
-    return res.json({
-      success: true,
-      data: {
-        id: updatedRow.id,
-        user_id: updatedRow.userId,
-        title: updatedRow.title,
-        description: updatedRow.description,
-        link: updatedRow.link,
-        image_url: updatedRow.imageUrl,
-        created_at: updatedRow.createdAt,
-        updated_at: updatedRow.updatedAt,
-      },
+    db.run(updateQuery, [title, description, link, image_url, id, userId], function (err) {
+      if (err) {
+        console.error('Database error updating portfolio:', err);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to update portfolio',
+          error: err.message
+        });
+      }
+
+      // Ambil data terbaru
+      const selectQuery = `SELECT * FROM portfolios WHERE id = ?`;
+      db.get(selectQuery, [id], (err, updatedRow) => {
+        if (err) {
+          return res.status(500).json({ success: false, message: 'Database error' });
+        }
+        return res.json({
+          success: true,
+          data: updatedRow
+        });
+      });
     });
-  } catch (err) {
-    console.error('Database error updating portfolio:', err);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to update portfolio',
-      error: err.message,
-    });
-  }
+  });
 };
 
 // DELETE a portfolio item that belongs to the authenticated developer
-exports.deletePortfolio = async (req, res) => {
+exports.deletePortfolio = (req, res) => {
   const userId = req.user.id;
   const id = Number(req.params.id);
 
@@ -314,13 +289,14 @@ exports.deletePortfolio = async (req, res) => {
     return res.status(400).json({ success: false, message: 'Invalid portfolio id' });
   }
 
-  try {
-    const result = await db.portfolio.deleteMany({ where: { id, userId } });
-    if (!result || result.count === 0) {
+  const delQuery = `DELETE FROM portfolios WHERE id = ? AND user_id = ?`;
+  db.run(delQuery, [id, userId], function (err) {
+    if (err) {
+      return res.status(500).json({ success: false, message: 'Failed to delete portfolio' });
+    }
+    if (this.changes === 0) {
       return res.status(404).json({ success: false, message: 'Portfolio not found' });
     }
     return res.json({ success: true, message: 'Portfolio deleted successfully' });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: 'Failed to delete portfolio' });
-  }
+  });
 };

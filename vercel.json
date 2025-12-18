@@ -4,11 +4,15 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/$1"
+      "destination": "/api?path=/$1"
+    },
+    {
+      "source": "/v1/(.*)",
+      "destination": "/api?path=/v1/$1"
     },
     {
       "source": "/(.*)",
-      "destination": "/api/$1"
+      "destination": "/api?path=/$1"
     }
   ]
 }

@@ -27,6 +27,10 @@ app.use('/uploads', express_1.default.static(uploadsDir));
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', message: 'API is running' });
 });
+// Versioned health check
+app.get('/v1/health', (req, res) => {
+    res.json({ status: 'ok', message: 'API is running' });
+});
 // Routes
 app.use('/auth', auth_routes_1.default);
 app.use('/profile', profile_routes_1.default);
@@ -35,6 +39,14 @@ app.use('/project', project_routes_1.default);
 app.use('/whatsapp', whatsapp_routes_1.default);
 app.use('/developer', developer_routes_1.default);
 app.use('/upload', upload_routes_1.default);
+// Versioned routes (/v1/*)
+app.use('/v1/auth', auth_routes_1.default);
+app.use('/v1/profile', profile_routes_1.default);
+app.use('/v1/portfolio', portfolio_routes_1.default);
+app.use('/v1/project', project_routes_1.default);
+app.use('/v1/whatsapp', whatsapp_routes_1.default);
+app.use('/v1/developer', developer_routes_1.default);
+app.use('/v1/upload', upload_routes_1.default);
 // Global error handler
 app.use((err, req, res, next) => {
     console.error('Error:', err);

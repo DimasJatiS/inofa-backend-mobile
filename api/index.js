@@ -8,8 +8,10 @@ const handler = app.default ?? app;
 // When using rewrites, the incoming URL can include the "/api" prefix.
 // Strip it so our Express routes ("/health", "/auth", etc.) match.
 module.exports = (req, res) => {
-	if (req && typeof req.url === 'string' && req.url.startsWith('/api')) {
-		req.url = req.url.slice(4) || '/';
+	if (req && typeof req.url === 'string') {
+		while (req.url.startsWith('/api')) {
+			req.url = req.url.slice(4) || '/';
+		}
 	}
 	return handler(req, res);
 };

@@ -12,7 +12,7 @@
 ### 1. Set Environment Variables di Vercel Dashboard
 
 **Wajib:**
-- `DATABASE_URL` - Supabase connection pooler URL (port 6543)
+- `POSTGRES_PRISMA_URL` - Supabase connection pooler URL (port 6543)
   ```
   postgresql://postgres.xxxxx:[PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true
   ```
@@ -52,7 +52,7 @@ curl -X POST https://your-app.vercel.app/auth/login \
 2. Klik tab **Functions** atau **Logs**
 3. Cari error:
    - `Cannot find module` → path issue
-   - `PrismaClientInitializationError` → DATABASE_URL salah/tidak ada
+   - `PrismaClientInitializationError` → POSTGRES_PRISMA_URL salah/tidak ada
    - `Unexpected token` → ESM/CommonJS mismatch
    - `ZodError` → environment variable tidak lengkap
 
@@ -62,7 +62,7 @@ curl -X POST https://your-app.vercel.app/auth/login \
 → Build tidak jalan. Pastikan `npm run build` berhasil lokal.
 
 **Error: Can't reach database**
-→ DATABASE_URL di Vercel belum diset atau salah format.
+→ POSTGRES_PRISMA_URL di Vercel belum diset atau salah format.
 
 **Error: Invalid JWT secret**
 → JWT_SECRET di Vercel belum diset.

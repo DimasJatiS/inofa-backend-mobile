@@ -5,7 +5,9 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Nama variabel dari integrasi Supabase di Vercel (diisi otomatis saat password dirotasi)
+  url       = env("POSTGRES_PRISMA_URL")      // lewat pooler, untuk runtime
+  directUrl = env("POSTGRES_URL_NON_POOLING") // koneksi langsung, untuk prisma db push / migrate
 }
 
 model User {

@@ -45,8 +45,8 @@ function mapPrismaError(error: unknown): { status: number; message: string } | n
   }
 
   if (error instanceof Error) {
-    if (error.message.includes('Environment variable not found: DATABASE_URL')) {
-      return { status: 500, message: 'Server misconfigured: DATABASE_URL is missing' };
+    if (error.message.includes('Environment variable not found: POSTGRES_PRISMA_URL')) {
+      return { status: 500, message: 'Server misconfigured: POSTGRES_PRISMA_URL is missing' };
     }
 
     // Common when schema was never pushed/migrated

@@ -75,7 +75,7 @@ npm install
 2. Dapatkan connection string dari: **Settings > Database > Connection String (URI)**
 3. Copy `.env.example` ke `.env`:
    ```env
-   DATABASE_URL="postgresql://postgres:[PASSWORD]@db.[PROJECT-ID].supabase.co:5432/postgres"
+   POSTGRES_PRISMA_URL="postgresql://postgres:[PASSWORD]@db.[PROJECT-ID].supabase.co:5432/postgres"
    JWT_SECRET="your_jwt_secret_here"
    ```
 
@@ -107,7 +107,7 @@ npm i -g vercel
 ### 2. Setup Environment Variables di Vercel
 
 Di Vercel dashboard, tambahkan:
-- `DATABASE_URL` = Connection string Supabase lengkap
+- `POSTGRES_PRISMA_URL` = Connection string Supabase lengkap
 - `JWT_SECRET` = JWT secret key kamu
 
 ### 3. Deploy

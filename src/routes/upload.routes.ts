@@ -20,6 +20,15 @@ function ensureUploadDirExists(): void {
   }
 }
 
+// Ekstensi dari MIME yang diizinkan: nama file pengirim bisa berakhiran .html dan disajikan sebagai halaman.
+const EXT_BY_MIME: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/jpg': '.jpg',
+  'image/png': '.png',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+};
+
 // Configure multer
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -32,7 +41,7 @@ const storage = multer.diskStorage({
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
+    const ext = EXT_BY_MIME[file.mimetype];
     cb(null, 'img-' + uniqueSuffix + ext);
   },
 });
@@ -42,11 +51,10 @@ const fileFilter = (
   file: Express.Multer.File,
   cb: multer.FileFilterCallback
 ) => {
-  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-  if (allowedTypes.includes(file.mimetype)) {
+  if (file.mimetype in EXT_BY_MIME) {
     cb(null, true);
   } else {
-    cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WEBP are allowed.'));
+    cb(Object.assign(new Error('Invalid file type. Only JPEG, PNG, GIF, and WEBP are allowed.'), { status: 400 }));
   }
 };
 

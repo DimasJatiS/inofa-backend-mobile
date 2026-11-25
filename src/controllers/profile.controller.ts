@@ -74,7 +74,7 @@ export const createProfile = async (req: Request, res: Response): Promise<void> 
       res.status(400).json({
         success: false,
         message: 'Validation error',
-        errors: error.errors,
+        errors: error.issues,
       });
       return;
     }
@@ -136,7 +136,7 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
       res.status(400).json({
         success: false,
         message: 'Validation error',
-        errors: error.errors,
+        errors: error.issues,
       });
       return;
     }
@@ -184,7 +184,6 @@ export const getUserProfile = async (req: Request, res: Response): Promise<void>
       include: {
         user: {
           select: {
-            email: true,
             role: true,
           },
         },
@@ -200,6 +199,7 @@ export const getUserProfile = async (req: Request, res: Response): Promise<void>
       success: true,
       data: {
         ...profile,
+        whatsapp: (req as any).user ? profile.whatsapp : null,
         skills: profile.skills as string[] | null,
       },
     });

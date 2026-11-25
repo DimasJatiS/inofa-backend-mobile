@@ -9,6 +9,19 @@ interface JWTPayload {
   role: string | null;
 }
 
+// Endpoint publik: token valid membuka data kontak, tanpa token tetap boleh membaca.
+export const optionalAuth = (req: Request, res: Response, next: NextFunction): void => {
+  const token = req.headers['authorization']?.split(' ')[1];
+  if (token) {
+    try {
+      (req as any).user = jwt.verify(token, JWT_SECRET) as JWTPayload;
+    } catch {
+      // token kedaluwarsa diperlakukan sebagai pengunjung anonim
+    }
+  }
+  next();
+};
+
 export const authMiddleware = (req: Request, res: Response, next: NextFunction): void => {
   const authHeader = req.headers['authorization'];
 

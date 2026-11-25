@@ -112,7 +112,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({
         success: false,
         message: 'Validation error',
-        errors: error.errors,
+        errors: error.issues,
       });
       return;
     }
@@ -180,7 +180,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({
         success: false,
         message: 'Validation error',
-        errors: error.errors,
+        errors: error.issues,
       });
       return;
     }
@@ -345,7 +345,7 @@ export const setRole = async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({
         success: false,
         message: 'Validation error',
-        errors: error.errors,
+        errors: error.issues,
       });
       return;
     }

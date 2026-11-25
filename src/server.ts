@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+import multer from 'multer';
 
 dotenv.config();
 
@@ -54,12 +55,18 @@ app.use('/v1/upload', uploadRoutes);
 
 // Global error handler
 app.use((err: any, req: Request, res: Response, next: any) => {
+  // Kesalahan klien (JSON rusak, body/file terlalu besar, tipe file salah) aman ditampilkan; sisanya jangan.
+  const status = err instanceof multer.MulterError ? 400 : err.status;
+  if (status >= 400 && status < 500) {
+    res.status(status).json({ success: false, message: err.message });
+    return;
+  }
   console.error('Error:', err);
-  res.status(500).json({
-    success: false,
-    message: err.message || 'Internal server error',
-  });
+  res.status(500).json({ success: false, message: 'Internal server error' });
 });
+
+// Lokal saja: di Vercel file ini di-import, bukan dijalankan langsung
+if (require.main === module) app.listen(PORT, () => console.log(`Innofa API di http://localhost:${PORT}`));
 
 export default app;
 

@@ -39,7 +39,7 @@ export const createProject = async (req: Request, res: Response): Promise<void> 
       res.status(400).json({
         success: false,
         message: 'Validation error',
-        errors: error.errors,
+        errors: error.issues,
       });
       return;
     }
@@ -101,7 +101,7 @@ export const updateProject = async (req: Request, res: Response): Promise<void> 
       res.status(400).json({
         success: false,
         message: 'Validation error',
-        errors: error.errors,
+        errors: error.issues,
       });
       return;
     }
@@ -181,7 +181,6 @@ export const getAllProjects = async (req: Request, res: Response): Promise<void>
       include: {
         user: {
           select: {
-            email: true,
             profile: {
               select: {
                 name: true,
@@ -214,11 +213,10 @@ export const getProjectById = async (req: Request, res: Response): Promise<void>
       include: {
         user: {
           select: {
-            email: true,
             profile: {
               select: {
                 name: true,
-                whatsapp: true,
+                whatsapp: Boolean((req as any).user),
               },
             },
           },

@@ -4,7 +4,7 @@
   "type": "commonjs",
   "scripts": {
     "dev": "nodemon --exec ts-node src/server.ts",
-    "build": "prisma generate && .\\node_modules\\.bin\\tsc.cmd -p tsconfig.json",
+    "build": "prisma generate && tsc -p tsconfig.json",
     "postinstall": "echo skip",
     "start": "node dist/server.js",
     "prisma:migrate": "prisma migrate dev",
@@ -13,8 +13,6 @@
   },
   "dependencies": {
     "@prisma/client": "^5.8.0",
-    "@supabase/supabase-js": "^2.88.0",
-    "@vercel/node": "^2.3.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
@@ -22,7 +20,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
     "typescript": "5.3.3",
-    "zod": "^3.22.4"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

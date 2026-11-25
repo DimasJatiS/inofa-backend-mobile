@@ -9,7 +9,6 @@ export const getAllDevelopers = async (req: Request, res: Response): Promise<voi
       },
       select: {
         id: true,
-        email: true,
         role: true,
         createdAt: true,
         profile: {
@@ -19,7 +18,7 @@ export const getAllDevelopers = async (req: Request, res: Response): Promise<voi
             bio: true,
             location: true,
             skills: true,
-            whatsapp: true,
+            whatsapp: Boolean((req as any).user),
           },
         },
         portfolios: {
@@ -45,6 +44,8 @@ export const getAllDevelopers = async (req: Request, res: Response): Promise<voi
       success: true,
       data: developers.map((dev) => ({
         ...dev,
+        // Endpoint publik: email tidak dibuka, tapi field-nya tetap ada karena wajib (non-null) di aplikasi Android.
+        email: '',
         profile: dev.profile
           ? {
               ...dev.profile,
@@ -75,7 +76,6 @@ export const getDeveloperById = async (req: Request, res: Response): Promise<voi
       },
       select: {
         id: true,
-        email: true,
         role: true,
         createdAt: true,
         profile: {
@@ -85,7 +85,7 @@ export const getDeveloperById = async (req: Request, res: Response): Promise<voi
             bio: true,
             location: true,
             skills: true,
-            whatsapp: true,
+            whatsapp: Boolean((req as any).user),
           },
         },
         portfolios: {
@@ -113,6 +113,7 @@ export const getDeveloperById = async (req: Request, res: Response): Promise<voi
       success: true,
       data: {
         ...developer,
+        email: '',
         profile: developer.profile
           ? {
               ...developer.profile,
